@@ -20,10 +20,25 @@ plotPosterior <- function(df, param) {
     stat_halfeye(aes(fill = after_stat(level)), .width = c(.95, 1),
                  point_interval = mean_hdi) +
     scale_fill_brewer(na.translate = F, palette = "YlOrRd") +
-    labs(title = "Posterior PDF with HDPI",
+    labs(title = "Posterior PDF with HDI",
          x = "Estimate",
          y = NULL,
-         fill = "HDPI")
+         fill = "HDI")
+}
+
+plotPosteriorCDF <- function(df, param) {
+  
+  df <- df %>%
+    filter(Parameter == param)
+  
+  ggplot(data = df, aes(x = Parameter, y = Value)) +
+    stat_ccdfinterval(aes(fill = after_stat(level)), .width = c(.95, 1),
+                      point_interval = mean_hdi, justification = 1) +
+    scale_fill_brewer(na.translate = F, palette = "YlOrRd") +
+    labs(title = "Posterior CDF with HDI",
+         x = paste0(param, " Estimate"),
+         y = NULL,
+         fill = "HDI")
 }
 
 ui <- page_fluid(
@@ -130,7 +145,7 @@ ui <- page_fluid(
                                    label = "Scale of half-Cauchy prior
                                    distribution for standard deviation of
                                    outcome variable residuals",
-                                   value = 25,
+                                   value = 10,
                                    min = 0)
                     ),
                     accordion_panel(
@@ -147,8 +162,8 @@ ui <- page_fluid(
                                   label = "Is the treatment effect of interest 
                               above or below zero?",
                                   list(
-                                    "TE > 0" = ">",
-                                    "TE < 0" = "<")
+                                    "TE < 0" = "<",
+                                    "TE > 0" = ">")
                       )
                     ),
                     input_task_button("activate", "Fit models"),
@@ -212,26 +227,13 @@ ui <- page_fluid(
               accordion(
                 accordion_panel(
                   "Frequentist results",
-                  accordion(
-                    accordion_panel(
-                      "ANOVA-CHANGE",
-                      DT::DTOutput("anova")
-                    ),
-                    accordion_panel(
-                      "ANCOVA",
-                      DT::DTOutput("ancova")
-                    ),
-                    accordion_panel(
-                      "LMM",
-                      DT::DTOutput("lmm")
-                    )
-                  )
+                  DT::DTOutput("ancova")
                 ),
                 accordion_panel(
                   "Bayesian results",
                   accordion(
                     accordion_panel(
-                      "Coefficient estimates and HDPIs",
+                      "Coefficient estimates and HDIs",
                       DT::DTOutput("brm")
                     ),
                     accordion_panel(
@@ -390,38 +392,15 @@ server <- function(input, output, session) {
         .default = 1)) %>% 
       select(input$id, input$group, input$baseline, input$fwup, change)
   })
-  
-  longdata <- reactive({
+
+  ancovaformula <- reactive({
+    
+    req(sel_data())
     
     sd <- sel_data()
     validate(
       need(nrow(sd) > 0, "Not enough complete cases available for analysis.")
     )
-    
-    sd %>%
-      select(input$id, input$group, input$baseline, input$fwup) %>% 
-      pivot_longer(cols = c(input$baseline, input$fwup),
-                   names_to = "time", values_to = "score") %>% 
-      mutate(time = factor(time, levels = c(input$baseline, input$fwup)))
-  })
-  
-  lmmformula <- reactive({
-    
-    req(sel_data(), longdata())
-    
-    as.formula(glue("score ~ time * `{input$group}` + (1| `{input$id}`)"))
-  })
-  
-  anovaformula <- reactive({
-    
-    req(sel_data(), longdata())
-    
-    as.formula(glue("change ~ `{input$group}`"))
-  })
-  
-  ancovaformula <- reactive({
-    
-    req(sel_data(), longdata())
     
     as.formula(glue("`{input$fwup}` ~ `{input$baseline}` + `{input$group}`"))
   })
@@ -429,12 +408,10 @@ server <- function(input, output, session) {
   ffit <- eventReactive(
     input$activate,
     {
-      req(lmmformula(), anovaformula(), ancovaformula())
+      req(ancovaformula())
       
       tryCatch({
         list(
-          lmm = lmer(lmmformula(), data = longdata()),
-          anova = lm(anovaformula(), data = sel_data()),
           ancova = lm(ancovaformula(), data = sel_data())
         )
       }, error = function(e) {
@@ -542,24 +519,7 @@ server <- function(input, output, session) {
     
     mcmc_plot(bfit()[["bayes"]], type = "hist")
   })
-  
-  output$anova <- DT::renderDT({
-    
-    req(ffit())
-    
-    sum_anova <- summary(ffit()[["anova"]])
-    ci_anova <- confint(ffit()[["anova"]])
-    bind_cols(sum_anova$coefficients, ci_anova) %>% 
-      tibble() %>% 
-      rename("P-Value" = "Pr(>|t|)") %>%
-      mutate(Coefficient = c("Intercept", input$group),
-             `95% CI` = paste0("(", round(`2.5 %`, 2), ", ",
-                               round(`97.5 %`, 2), ")"),
-             Estimate = round(Estimate, 2),
-             `P-Value` = round(`P-Value`, 4)) %>%
-      select(Coefficient, Estimate, `P-Value`, `95% CI`)
-  })
-  
+
   output$ancova <- DT::renderDT({
     
     req(ffit())
@@ -576,25 +536,7 @@ server <- function(input, output, session) {
              `P-Value` = round(`P-Value`, 4)) %>% 
       select(Coefficient, Estimate, `P-Value`, `95% CI`)
   })
-  
-  output$lmm <- DT::renderDT({
-    
-    req(ffit())
-    
-    sum_lmm <- summary(ffit()[["lmm"]], ddf = "Kenward-Roger")
-    ci_lmm <- model_parameters(ffit()[["lmm"]], ci_method = "kenward")
-    bind_cols(sum_lmm$coefficients, drop_na(as_tibble(ci_lmm$CI_low)),
-              drop_na(as_tibble(ci_lmm$CI_high))) %>% 
-      rename("P-Value" = "Pr(>|t|)") %>%
-      mutate(Coefficient = c("Intercept", "Time", input$group, 
-                             paste0("Time:", input$group)),
-             `95% CI` = paste0("(", round(`value...6`, 2), ", ",
-                               round(`value...7`, 2), ")"),
-             Estimate = round(Estimate, 2),
-             `P-Value` = round(`P-Value`, 4)) %>% 
-      select(Coefficient, Estimate, `P-Value`, `95% CI`)
-  })
-  
+
   output$brm <- DT::renderDT({
     
     req(bfit(), draws())

@@ -11,34 +11,66 @@ library(ggfortify)
 library(shiny)
 library(bslib)
 
-plotPosterior <- function(df, param) {
+plotPosterior <- function(df, param, size, type, ct) {
+  
+  dsize <- size/100
+  
+  interval <- switch(
+    tolower(type),
+    "hdi" = switch(tolower(ct),
+                   "mean"   = mean_hdi,
+                   "median" = median_hdi,
+                   "mode"   = mode_hdi),
+    "ci" = switch(tolower(ct),
+                  "mean"   = mean_qi,
+                  "median" = median_qi,
+                  "mode"   = mode_qi)
+  )
   
   df <- df %>%
     filter(Parameter == param)
   
   ggplot(data = df, aes(x = Value, y = Parameter)) +
-    stat_halfeye(aes(fill = after_stat(level)), .width = c(.95, 1),
-                 point_interval = mean_hdi) +
+    stat_halfeye(aes(fill = after_stat(level)), .width = c(dsize, 1),
+                 point_interval = interval) +
     scale_fill_brewer(na.translate = F, palette = "YlOrRd") +
-    labs(title = "Posterior PDF with HDI",
+    labs(title = paste("Posterior PDF with", size, "%", toupper(type),
+                       "and", ct),
          x = "Estimate",
          y = NULL,
-         fill = "HDI")
+         fill = toupper(type)
+    )
 }
 
-plotPosteriorCDF <- function(df, param) {
+plotPosteriorCDF <- function(df, param, size, type, ct) {
+  
+  dsize <- size/100
+  
+  interval <- switch(
+    tolower(type),
+    "hdi" = switch(tolower(ct),
+                   "mean"   = mean_hdi,
+                   "median" = median_hdi,
+                   "mode"   = mode_hdi),
+    "ci" = switch(tolower(ct),
+                  "mean"   = mean_qi,
+                  "median" = median_qi,
+                  "mode"   = mode_qi)
+  )
   
   df <- df %>%
     filter(Parameter == param)
   
   ggplot(data = df, aes(x = Parameter, y = Value)) +
-    stat_ccdfinterval(aes(fill = after_stat(level)), .width = c(.95, 1),
-                      point_interval = mean_hdi, justification = 1) +
+    stat_ccdfinterval(aes(fill = after_stat(level)), .width = c(dsize, 1),
+                 point_interval = interval, justification = 1) +
     scale_fill_brewer(na.translate = F, palette = "YlOrRd") +
-    labs(title = "Posterior CDF with HDI",
-         x = paste0(param, " Estimate"),
+    labs(title = paste("Posterior CDF with", size, "%", toupper(type),
+                       "and", ct),
+         x = "Estimate",
          y = NULL,
-         fill = "HDI")
+         fill = toupper(type)
+    )
 }
 
 ui <- page_fluid(
@@ -68,10 +100,12 @@ ui <- page_fluid(
                   conditionalPanel(condition = "input.group != null &&
                                     input.group != ''",
                                    selectInput(inputId = "ref",
-                                               label = "Which treatment group is the reference 
+                                               label = "Which treatment group 
+                                               is the reference 
                                 group?",
                                                choices = NULL),
-                                   helpText("Note: This app currently performs analysis
+                                   helpText("Note: This app currently performs 
+                                   analysis
                               only on trials with two groups")
                   ),
                   selectInput(inputId = "baseline", 
@@ -160,10 +194,44 @@ ui <- page_fluid(
                       "Treatment effect direction",
                       selectInput(inputId = "nulleffect",
                                   label = "Is the treatment effect of interest 
-                              above or below zero?",
+                              below or above zero?",
                                   list(
                                     "TE < 0" = "<",
                                     "TE > 0" = ">")
+                      )
+                    ),
+                    accordion_panel(
+                      "Central tendency measure for plots",
+                      selectInput(inputId = "plotCT",
+                                  label = "Which measure of central tendency 
+                                  should be plotted for posterior 
+                                  visualisation?",
+                                  list(
+                                    "Mean" = "mean",
+                                    "Median" = "median",
+                                    "Mode" = "mode"
+                                    )
+                                  )
+                    ),
+                    accordion_panel(
+                      "Intervals for plots",
+                      selectInput(inputId = "plotCI",
+                                  label = "Credible intervals or HDIs for 
+                                  posterior visualisation?",
+                                  list(
+                                    "Credible Intervals" = "ci",
+                                    "HDIs" = "hdi"
+                                    )
+                                  )
+                    ),
+                    accordion_panel(
+                      "Interval size",
+                      numericInput(inputId = "sizeCI",
+                                   label = "What width should be used for 
+                                   CIs/HDIs?",
+                                   value = 95,
+                                   min = 50,
+                                   max = 99
                       )
                     ),
                     input_task_button("activate", "Fit models"),
@@ -198,7 +266,8 @@ ui <- page_fluid(
                 accordion_panel(
                   "MCMC trace plot",
                   plotOutput("traceplot"),
-                  helpText("Please allow a moment for trace plot rendering")
+                  helpText("Please allow a moment for trace plot rendering"),
+                  downloadButton(outputId = "dl_traceplot", label = "Download")
                 ),
                 accordion_panel(
                   "Rhat",
@@ -207,7 +276,9 @@ ui <- page_fluid(
                 accordion_panel(
                   "MCMC trace plot (x2 iterations)",
                   plotOutput("traceplotx2"),
-                  helpText("Please allow a moment for trace plot rendering")
+                  helpText("Please allow a moment for trace plot rendering"),
+                  downloadButton(outputId = "dl_traceplotx2",
+                                 label = "Download")
                 ),
                 accordion_panel(
                   "Rhat (x2 iterations)",
@@ -215,11 +286,13 @@ ui <- page_fluid(
                 ),
                 accordion_panel(
                   "Autocorrelation plot",
-                  plotOutput("acfplot")
+                  plotOutput("acfplot"),
+                  downloadButton(outputId = "dl_acfplot", label = "Download")
                 ),
                 accordion_panel(
                   "Posterior draws histogram",
-                  plotOutput("histplot")
+                  plotOutput("histplot"),
+                  downloadButton(outputId = "dl_histplot", label = "Download")
                 )
               )
     ),
@@ -227,37 +300,82 @@ ui <- page_fluid(
               accordion(
                 accordion_panel(
                   "Frequentist results",
-                  DT::DTOutput("ancova")
+                  DT::DTOutput("ancova"),
+                  downloadButton(outputId = "dl_ancova", label = "Download")
                 ),
                 accordion_panel(
                   "Bayesian results",
                   accordion(
                     accordion_panel(
-                      "Coefficient estimates and HDIs",
-                      DT::DTOutput("brm")
+                      "Coefficient estimates and intervals",
+                      DT::DTOutput("brm"),
+                      downloadButton(outputId = "dl_brm", label = "Download")
                     ),
                     accordion_panel(
                       "Posterior probability",
                       textOutput("postprob")
                     ),
                     accordion_panel(
-                      "Posterior distributions of coefficents with HDPIs",
+                      "Plots of posterior distributions of coefficents with 
+                      selected intervals",
                       accordion(
                         accordion_panel(
-                          "Model intercept",
-                          plotOutput("interplot")
-                        ),
+                          "PDFs",
+                          accordion(
+                            accordion_panel(
+                            "Model intercept",
+                            plotOutput("interplotpdf"),
+                            downloadButton(outputId = "dl_interplotpdf",
+                                           label = "Download")
+                            ),
+                            accordion_panel(
+                            "Baseline effect",
+                            plotOutput("baseplotpdf"),
+                            downloadButton(outputId = "dl_baseplotpdf",
+                                           label = "Download")
+                            ),
+                            accordion_panel(
+                            "Treatment effect",
+                            plotOutput("teplotpdf"),
+                            downloadButton(outputId = "dl_teplotpdf",
+                                           label = "Download")
+                            ),
+                            accordion_panel(
+                            "SD of residuals",
+                            plotOutput("sdplotpdf"),
+                            downloadButton(outputId = "dl_sdplotpdf",
+                                           label = "Download")
+                            )
+                            )
+                          ),
                         accordion_panel(
-                          "Baseline effect",
-                          plotOutput("baseplot")
-                        ),
-                        accordion_panel(
-                          "Treatment effect",
-                          plotOutput("teplot")
-                        ),
-                        accordion_panel(
-                          "SD of residuals",
-                          plotOutput("sdplot")
+                          "CCDFs",
+                          accordion(
+                            accordion_panel(
+                              "Model intercept",
+                              plotOutput("interplotcdf"),
+                              downloadButton(outputId = "dl_interplotcdf",
+                                             label = "Download")
+                            ),
+                            accordion_panel(
+                              "Baseline effect",
+                              plotOutput("baseplotcdf"),
+                              downloadButton(outputId = "dl_baseplotcdf",
+                                             label = "Download")
+                            ),
+                            accordion_panel(
+                              "Treatment effect",
+                              plotOutput("teplotcdf"),
+                              downloadButton(outputId = "dl_teplotcdf",
+                                             label = "Download")
+                            ),
+                            accordion_panel(
+                              "SD of residuals",
+                              plotOutput("sdplotcdf"),
+                              downloadButton(outputId = "dl_sdplotcdf",
+                                             label = "Download")
+                            )
+                          )
                         )
                       )
                     )
@@ -448,13 +566,13 @@ server <- function(input, output, session) {
                       thin = 1, iter = input$iter,
                       warmup = input$iter / 2, prior = priors,
                       stanvars = stanparams, seed = input$seed,
-                      cores = detectCores(), chains = 4),
+                      cores = detectCores(), chains = min(4, detectCores())),
           
           bayesx2 = brm(ancovaformula(), data = sel_data(), silent = 1,
                         thin = 1, iter = input$iter * 2,
                         warmup = input$iter, prior = priors,
                         stanvars = stanparams, seed = input$seed,
-                        cores = detectCores(), chains = 4)
+                        cores = detectCores(), chains = min(4, detectCores()))
         )
       }, error = function(e) {
         showNotification("Error fitting Bayesian models: check priors and
@@ -489,7 +607,7 @@ server <- function(input, output, session) {
     req(bfit())
     
     sum <- summary(bfit()[["bayes"]])
-    rbind(sum$fixed, sum$spec_pars) %>%
+    bind_rows(sum$fixed, sum$spec_pars) %>%
       tibble %>% 
       mutate(Coefficient = c("Intercept", input$baseline, input$group,
                              "sigma"),
@@ -502,7 +620,7 @@ server <- function(input, output, session) {
     req(bfit())
     
     sum <- summary(bfit()[["bayesx2"]])
-    rbind(sum$fixed, sum$spec_pars) %>%
+    bind_rows(sum$fixed, sum$spec_pars) %>%
       tibble %>% 
       mutate(Coefficient = c("Intercept", input$baseline, input$group,
                              "sigma"),
@@ -519,6 +637,38 @@ server <- function(input, output, session) {
     
     mcmc_plot(bfit()[["bayes"]], type = "hist")
   })
+  
+  output$dl_traceplot <- downloadHandler(
+    filename = function() { paste0("traceplot_", Sys.Date(), ".jpg") },
+    content = function(file) {
+      ggsave(file, plot = mcmc_plot(bfit()[["bayes"]], type = "trace"),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_traceplotx2 <- downloadHandler(
+    filename = function() { paste0("traceplot_x2_", Sys.Date(), ".jpg") },
+    content = function(file) {
+      ggsave(file, plot = mcmc_plot(bfit()[["bayesx2"]], type = "trace"),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_acfplot <- downloadHandler(
+    filename = function() { paste0("acfplot_", Sys.Date(), ".jpg") },
+    content = function(file) {
+      ggsave(file, plot = mcmc_plot(bfit()[["bayes"]], type = "acf"),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_histplot <- downloadHandler(
+    filename = function() { paste0("histplot_", Sys.Date(), ".jpg") },
+    content = function(file) {
+      ggsave(file, plot = mcmc_plot(bfit()[["bayes"]], type = "hist"),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
 
   output$ancova <- DT::renderDT({
     
@@ -536,28 +686,145 @@ server <- function(input, output, session) {
              `P-Value` = round(`P-Value`, 4)) %>% 
       select(Coefficient, Estimate, `P-Value`, `95% CI`)
   })
-
+  
+  output$dl_ancova <- downloadHandler(
+    filename = function() { paste0("frequentist_results_", Sys.Date(),
+                                   ".csv") },
+    content = function(file) {
+      req(ffit())
+      sum_ancova <- summary(ffit()[["ancova"]])
+      ci_ancova <- confint(ffit()[["ancova"]])
+      table_out <- bind_cols(sum_ancova$coefficients, ci_ancova) %>%
+        tibble() %>%
+        rename("P-Value" = "Pr(>|t|)") %>%
+        mutate(Coefficient = c("Intercept", input$baseline, input$group),
+               `95% CI` = paste0("(", round(`2.5 %`, 2), ", ",
+                                 round(`97.5 %`, 2), ")"),
+               Estimate = round(Estimate, 2),
+               `P-Value` = round(`P-Value`, 4)) %>%
+        select(Coefficient, Estimate, `P-Value`, `95% CI`)
+      write.csv(table_out, file, row.names = FALSE)
+    }
+  )
+  
   output$brm <- DT::renderDT({
     
     req(bfit(), draws())
     
-    sum_brm <- summary(bfit()[["bayes"]])
-    sigma_ci_brm <- bayestestR::hdi(draws()$sigma) %>% 
-      mutate(Parameter = "sigma") %>% 
-      select(Parameter, CI, CI_low, CI_high)
-    ci_brm <- bayestestR::hdi(bfit()[["bayes"]]) %>% 
-      select(Parameter, CI, CI_low, CI_high) %>% 
-      rbind(sigma_ci_brm)
+    draws <- as_tibble(draws())
     
-    rbind(sum_brm$fixed, sum_brm$spec_pars) %>% 
-      cbind(ci_brm) %>% 
-      tibble() %>% 
-      mutate(Coefficient = c("Intercept", input$baseline, input$group, "sigma"),
-             Estimate = round(Estimate, 1),
-             `95% HDPI` = paste0("(", round(CI_low, 1), ", ",
-                                 round(CI_high, 1), ")")) %>% 
-      select(Coefficient, Estimate, `95% HDPI`)
+    size <- input$sizeCI / 100
+    size_label <- paste0(input$sizeCI, "%")
+    
+    sd_brm <- draws %>% 
+      select(b_Intercept:sigma) %>% 
+      sapply(sd) %>% 
+      as_tibble() %>% 
+      rename("SD" = "value")
+    
+    mode_brm <- draws %>% 
+      select(b_Intercept:sigma) %>% 
+      sapply(mode) %>% 
+      as_tibble() %>% 
+      rename("Mode" = "value")
+    
+    median_brm <- draws %>% 
+      select(b_Intercept:sigma) %>% 
+      sapply(median) %>% 
+      as_tibble() %>% 
+      rename("Median" = "value")
+    
+    sum_brm <- summary(bfit()[["bayes"]])
+    
+    hdi_brm <- bayestestR::hdi(bfit()[["bayes"]], ci = size) %>% 
+      select(Parameter, CI_low, CI_high)
+    sigma_hdi <- bayestestR::hdi(draws$sigma, ci = size) %>% 
+      mutate(Parameter = "sigma") %>% 
+      select(Parameter, CI_low, CI_high)
+    hdi_brm <- bind_rows(hdi_brm, sigma_hdi) %>% 
+      rename(HDI_low = CI_low, HDI_high = CI_high)
+    
+    ci_brm <- bayestestR::ci(bfit()[["bayes"]], ci = size) %>% 
+      select(Parameter, CI_low, CI_high)
+    sigma_ci <- bayestestR::ci(draws$sigma, ci = size) %>% 
+      mutate(Parameter = "sigma") %>% 
+      select(Parameter, CI_low, CI_high)
+    ci_brm <- bind_rows(ci_brm, sigma_ci)
+    
+    result_table <- tibble(
+      Coefficient = c("Intercept", input$baseline, input$group, "sigma"),
+      Mean = round(c(sum_brm$fixed$Estimate, sum_brm$spec_pars$Estimate), 2),
+      Mode = round(mode_brm$Mode, 2),
+      Median = round(median_brm$Median, 2),
+      SD = round(sd_brm$SD, 2),
+      !!paste0(size_label, " HDPI") := paste0("(", round(hdi_brm$HDI_low, 2),
+                                              ", ", round(hdi_brm$HDI_high, 2),
+                                              ")"),
+      !!paste0(size_label, " CI") := paste0("(", round(ci_brm$CI_low, 2), ", ",
+                                            round(ci_brm$CI_high, 2), ")")
+    )
+    
+    DT::datatable(result_table)
   })
+  
+  output$dl_brmtable <- downloadHandler(
+    filename = function() {
+      paste0("bayesian_summary_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      req(bfit(), draws())
+      
+      size <- input$sizeCI / 100
+      size_label <- paste0(input$sizeCI, "%")
+      
+      sd_brm <- draws()[,1:4] %>%  
+        map_dbl(sd) %>% 
+        as_tibble() %>% 
+        rename("SD" = "value")
+      
+      mode_brm <- draws()[,1:4] %>% 
+        map_dbl(mode) %>% 
+        as_tibble() %>% 
+        rename("Mode" = "value")
+      
+      median_brm <- draws()[,1:4] %>% 
+        map_dbl(median) %>% 
+        as_tibble() %>% 
+        rename("Median" = "value")
+      
+      sum_brm <- summary(bfit()[["bayes"]])
+      
+      hdi_brm <- bayestestR::hdi(bfit()[["bayes"]], ci = size) %>% 
+        select(Parameter, CI_low, CI_high)
+      sigma_hdi <- bayestestR::hdi(draws()$sigma, ci = size) %>% 
+        mutate(Parameter = "sigma") %>% 
+        select(Parameter, CI_low, CI_high)
+      hdi_brm <- bind_rows(hdi_brm, sigma_hdi) %>% 
+        rename(HDI_low = CI_low, HDI_high = CI_high)
+      
+      ci_brm <- bayestestR::ci(bfit()[["bayes"]], ci = size) %>% 
+        select(Parameter, CI_low, CI_high)
+      sigma_ci <- bayestestR::ci(draws()$sigma, ci = size) %>% 
+        mutate(Parameter = "sigma") %>% 
+        select(Parameter, CI_low, CI_high)
+      ci_brm <- bind_rows(ci_brm, sigma_ci)
+      
+      result_table <- tibble(
+        Coefficient = c("Intercept", input$baseline, input$group, "sigma"),
+        Mean = round(c(sum_brm$fixed$Estimate, sum_brm$spec_pars$Estimate), 2),
+        Mode = round(mode_brm$Mode, 2),
+        Median = round(median_brm$Median, 2),
+        SD = round(sd_brm$SD, 2),
+        !!paste0(size_label, " HDPI") := paste0("(", round(hdi_brm$HDI_low, 2),
+                                                ", ", round(hdi_brm$HDI_high, 2),
+                                                ")"),
+        !!paste0(size_label, " CI") := paste0("(", round(ci_brm$CI_low, 2), ", ",
+                                              round(ci_brm$CI_high, 2), ")")
+      )
+      
+      write.csv(result_table, file, row.names = FALSE)
+    }
+  )
   
   output$postprob <- renderPrint({
     
@@ -583,25 +850,149 @@ server <- function(input, output, session) {
                    names_to = "Parameter", values_to = "Value")
   })
   
-  output$interplot <- renderPlot({
+  output$interplotpdf <- renderPlot({
     
-    plotPosterior(draws_long(), "b_Intercept")
+    plotPosterior(draws_long(), "b_Intercept", input$sizeCI, input$plotCI,
+                  input$plotCT)
   })
   
-  output$baseplot <- renderPlot({
+  output$baseplotpdf <- renderPlot({
     
-    plotPosterior(draws_long(), paste0("b_", make.names(input$baseline)))
+    plotPosterior(draws_long(), paste0("b_", make.names(input$baseline)),
+                  input$sizeCI, input$plotCI, input$plotCT)
   })
   
-  output$teplot <- renderPlot({
+  output$teplotpdf <- renderPlot({
     
-    plotPosterior(draws_long(), paste0("b_", make.names(input$group)))
+    plotPosterior(draws_long(), paste0("b_", make.names(input$group)),
+                  input$sizeCI, input$plotCI, input$plotCT)
   })
   
-  output$sdplot <- renderPlot({
+  output$sdplotpdf <- renderPlot({
     
-    plotPosterior(draws_long(), "sigma")
+    plotPosterior(draws_long(), "sigma", input$sizeCI, input$plotCI,
+                  input$plotCT)
   })
+  
+  output$interplotcdf <- renderPlot({
+    
+    plotPosteriorCDF(draws_long(), "b_Intercept", input$sizeCI, input$plotCI,
+                     input$plotCT)
+  })
+  
+  output$baseplotcdf <- renderPlot({
+    
+    plotPosteriorCDF(draws_long(), paste0("b_", make.names(input$baseline)),
+                  input$sizeCI, input$plotCI, input$plotCT)
+  })
+  
+  output$teplotcdf <- renderPlot({
+    
+    plotPosteriorCDF(draws_long(), paste0("b_", make.names(input$group)),
+                  input$sizeCI, input$plotCI, input$plotCT)
+  })
+  
+  output$sdplotcdf <- renderPlot({
+    
+    plotPosteriorCDF(draws_long(), "sigma", input$sizeCI, input$plotCI,
+                     input$plotCT)
+  })
+  
+  output$dl_interplotpdf <- downloadHandler(
+    filename = function() { paste0("intercept_posterior_pdf_", Sys.Date(),
+                                   ".png") },
+    content = function(file) {
+      ggsave(file, plot = plotPosterior(draws_long(), "b_Intercept",
+                                        input$sizeCI, input$plotCI,
+                                        input$plotCT),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_baseplotpdf <- downloadHandler(
+    filename = function() { paste0("baseline_posterior_pdf_", Sys.Date(),
+                                   ".png") },
+    content = function(file) {
+      ggsave(file, plot = plotPosterior(draws_long(),
+                                        paste0("b_",
+                                               make.names(input$baseline)),
+                                        input$sizeCI, input$plotCI,
+                                        input$plotCT),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_teplotpdf <- downloadHandler(
+    filename = function() { paste0("treatment_posterior_pdf_", Sys.Date(),
+                                   ".png") },
+    content = function(file) {
+      ggsave(file, plot = plotPosterior(draws_long(),
+                                        paste0("b_", make.names(input$group)),
+                                        input$sizeCI, input$plotCI,
+                                        input$plotCT),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_sdplotpdf <- downloadHandler(
+    filename = function() { paste0("sigma_posterior_pdf_", Sys.Date(),
+                                   ".png") },
+    content = function(file) {
+      ggsave(file, plot = plotPosterior(draws_long(), "sigma",
+                                        input$sizeCI, input$plotCI,
+                                        input$plotCT),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_interplotcdf <- downloadHandler(
+    filename = function() { paste0("intercept_posterior_cdf_", Sys.Date(),
+                                   ".png") },
+    content = function(file) {
+      ggsave(file, plot = plotPosteriorCDF(draws_long(), "b_Intercept",
+                                           input$sizeCI, input$plotCI,
+                                           input$plotCT),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_baseplotcdf <- downloadHandler(
+    filename = function() { paste0("baseline_posterior_cdf_", Sys.Date(),
+                                   ".png") },
+    content = function(file) {
+      ggsave(file, plot = plotPosteriorCDF(draws_long(),
+                                           paste0("b_",
+                                                  make.names(input$baseline)),
+                                           input$sizeCI, input$plotCI,
+                                           input$plotCT),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_teplotcdf <- downloadHandler(
+    filename = function() { paste0("treatment_posterior_cdf_", Sys.Date(),
+                                   ".png") },
+    content = function(file) {
+      ggsave(file, plot = plotPosteriorCDF(draws_long(),
+                                           paste0("b_",
+                                                  make.names(input$group)),
+                                           input$sizeCI, input$plotCI,
+                                           input$plotCT),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
+  output$dl_sdplotcdf <- downloadHandler(
+    filename = function() { paste0("sigma_posterior_cdf_", Sys.Date(),
+                                   ".png") },
+    content = function(file) {
+      ggsave(file, plot = plotPosteriorCDF(draws_long(), "sigma",
+                                           input$sizeCI, input$plotCI,
+                                           input$plotCT),
+             width = 10, height = 5, units = "in", dpi = 300)
+    }
+  )
+  
   
 }
 

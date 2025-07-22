@@ -723,11 +723,6 @@ server <- function(input, output, session) {
       as_tibble() %>% 
       rename("SD" = "value")
     
-    mode_brm <- draws %>% 
-      select(b_Intercept:sigma) %>% 
-      sapply(DescTools::Mode) %>% 
-      as_tibble()
-    
     median_brm <- draws %>% 
       select(b_Intercept:sigma) %>% 
       sapply(median) %>% 
@@ -754,7 +749,6 @@ server <- function(input, output, session) {
     result_table <- tibble(
       Coefficient = c("Intercept", input$baseline, input$group, "sigma"),
       Mean = round(c(sum_brm$fixed$Estimate, sum_brm$spec_pars$Estimate), 2),
-      Mode = round(mode_brm, 2),
       Median = round(median_brm$Median, 2),
       SD = round(sd_brm$SD, 2),
       !!paste0(size_label, " HDPI") := paste0("(", round(hdi_brm$HDI_low, 2),

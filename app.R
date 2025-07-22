@@ -20,12 +20,10 @@ plotPosterior <- function(df, param, size, type, ct) {
     tolower(type),
     "hdi" = switch(tolower(ct),
                    "mean"   = mean_hdi,
-                   "median" = median_hdi,
-                   "mode"   = mode_hdi),
+                   "median" = median_hdi),
     "ci" = switch(tolower(ct),
                   "mean"   = mean_qi,
-                  "median" = median_qi,
-                  "mode"   = mode_qi)
+                  "median" = median_qi)
   )
   
   df <- df %>%
@@ -209,8 +207,7 @@ ui <- page_fluid(
                                   visualisation?",
                                   list(
                                     "Mean" = "mean",
-                                    "Median" = "median",
-                                    "Mode" = "mode"
+                                    "Median" = "median"
                                     )
                                   )
                     ),

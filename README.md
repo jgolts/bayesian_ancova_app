@@ -14,7 +14,7 @@ This is an R Shiny app that performs Bayesian ANCOVA on pre/post measurement dat
 + Auto-detects number of cores and sets number of chains accordingly, to a minimum of 4 chains per STAN default
 + Frequentist model results (coefficients, p-values, confidence intervals)
 + ETI and HDI credible intervals supported at user-specified width for each parameter
-+ Displays mean, mode, median, and SD of posterior distribution for each parameter
++ Displays mean, median, and SD of posterior distribution for each parameter
 + MCMC diagnostics: Trace plots and Rhat, repeated at double the iterations, autocorrelation graphs, posterior histograms
 + Posterior distribution plots with custom width ETI/HDI and user-selected measure of central tendency
 + Download options for all plots and tables

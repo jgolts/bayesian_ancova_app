@@ -11,6 +11,7 @@ This is an R Shiny app that performs Bayesian ANCOVA on pre/post measurement dat
 + Allows user-defined priors for all model parameters - normal priors for coefficients, and half-Cauchy for SD of residuals
 + Visualises priors as density plots
 + Custom MCMC iterations and seed
++ Auto-detects number of cores and sets number of chains accordingly, to a minimum of 4 chains per STAN default
 + Frequentist model results (coefficients, p-values, confidence intervals)
 + ETI and HDI credible intervals supported at user-specified width for each parameter
 + Displays mean, mode, median, and SD of posterior distribution for each parameter

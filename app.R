@@ -6,6 +6,7 @@ library(lmerTest)
 library(parameters)
 library(brms)
 library(bayestestR)
+library(DescTools)
 library(ggdist)
 library(ggfortify)
 library(shiny)
@@ -724,9 +725,8 @@ server <- function(input, output, session) {
     
     mode_brm <- draws %>% 
       select(b_Intercept:sigma) %>% 
-      sapply(mode) %>% 
-      as_tibble() %>% 
-      rename("Mode" = "value")
+      sapply(DescTools::Mode) %>% 
+      as_tibble()
     
     median_brm <- draws %>% 
       select(b_Intercept:sigma) %>% 
@@ -754,7 +754,7 @@ server <- function(input, output, session) {
     result_table <- tibble(
       Coefficient = c("Intercept", input$baseline, input$group, "sigma"),
       Mean = round(c(sum_brm$fixed$Estimate, sum_brm$spec_pars$Estimate), 2),
-      Mode = round(mode_brm$Mode, 2),
+      Mode = round(mode_brm, 2),
       Median = round(median_brm$Median, 2),
       SD = round(sd_brm$SD, 2),
       !!paste0(size_label, " HDPI") := paste0("(", round(hdi_brm$HDI_low, 2),

@@ -22,3 +22,6 @@ This is an R Shiny app that performs Bayesian ANCOVA on pre/post measurement dat
 ## Planned Features
 + Expansion to 3+ group analysis
 + Additional covariate adjustment
+
+## Notice
+App defaults reflect the settings used in [Bayesian ANCOVA analysis](https://github.com/jgolts/bancova_analysis) of [Vickers, 2006](https://pmc.ncbi.nlm.nih.gov/articles/PMC1489946/) dataset. Please alter settings as relevant to your dataset before analysis.

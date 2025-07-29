@@ -178,7 +178,7 @@ ui <- page_fluid(
                                    label = "Scale of half-Cauchy prior
                                    distribution for standard deviation of
                                    outcome variable residuals",
-                                   value = 10,
+                                   value = 8,
                                    min = 0)
                     ),
                     accordion_panel(
@@ -231,6 +231,29 @@ ui <- page_fluid(
                                    min = 50,
                                    max = 99
                       )
+                    ),
+                    accordion_panel(
+                      "Plot size and DPI",
+                      numericInput(inputId = "plotw",
+                                   label = "Plot width in inches",
+                                   value = 10,
+                                   min = 1,
+                                   max = 50
+                      ),
+                      numericInput(inputId = "ploth",
+                                   label = "Plot height in inches",
+                                   value = 5,
+                                   min = 1,
+                                   max = 50
+                      ),
+                      numericInput(inputId = "dpi",
+                                   label = "Plot DPI",
+                                   value = 600,
+                                   min = 1,
+                                   max = 2000
+                                   ),
+                      helpText("If no DPI minimum is set 
+                                   by journal, leave default value")
                     ),
                     input_task_button("activate", "Fit models"),
                     div(),
@@ -640,7 +663,8 @@ server <- function(input, output, session) {
     filename = function() { paste0("traceplot_", Sys.Date(), ".jpg") },
     content = function(file) {
       ggsave(file, plot = mcmc_plot(bfit()[["bayes"]], type = "trace"),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -648,7 +672,8 @@ server <- function(input, output, session) {
     filename = function() { paste0("traceplot_x2_", Sys.Date(), ".jpg") },
     content = function(file) {
       ggsave(file, plot = mcmc_plot(bfit()[["bayesx2"]], type = "trace"),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -656,7 +681,8 @@ server <- function(input, output, session) {
     filename = function() { paste0("acfplot_", Sys.Date(), ".jpg") },
     content = function(file) {
       ggsave(file, plot = mcmc_plot(bfit()[["bayes"]], type = "acf"),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -664,7 +690,8 @@ server <- function(input, output, session) {
     filename = function() { paste0("histplot_", Sys.Date(), ".jpg") },
     content = function(file) {
       ggsave(file, plot = mcmc_plot(bfit()[["bayes"]], type = "hist"),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
 
@@ -896,7 +923,8 @@ server <- function(input, output, session) {
       ggsave(file, plot = plotPosterior(draws_long(), "b_Intercept",
                                         input$sizeCI, input$plotCI,
                                         input$plotCT),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -909,7 +937,8 @@ server <- function(input, output, session) {
                                                make.names(input$baseline)),
                                         input$sizeCI, input$plotCI,
                                         input$plotCT),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -921,7 +950,8 @@ server <- function(input, output, session) {
                                         paste0("b_", make.names(input$group)),
                                         input$sizeCI, input$plotCI,
                                         input$plotCT),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -932,7 +962,8 @@ server <- function(input, output, session) {
       ggsave(file, plot = plotPosterior(draws_long(), "sigma",
                                         input$sizeCI, input$plotCI,
                                         input$plotCT),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -943,7 +974,8 @@ server <- function(input, output, session) {
       ggsave(file, plot = plotPosteriorCDF(draws_long(), "b_Intercept",
                                            input$sizeCI, input$plotCI,
                                            input$plotCT),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -956,7 +988,8 @@ server <- function(input, output, session) {
                                                   make.names(input$baseline)),
                                            input$sizeCI, input$plotCI,
                                            input$plotCT),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -969,7 +1002,8 @@ server <- function(input, output, session) {
                                                   make.names(input$group)),
                                            input$sizeCI, input$plotCI,
                                            input$plotCT),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   
@@ -980,7 +1014,8 @@ server <- function(input, output, session) {
       ggsave(file, plot = plotPosteriorCDF(draws_long(), "sigma",
                                            input$sizeCI, input$plotCI,
                                            input$plotCT),
-             width = 10, height = 5, units = "in", dpi = 300)
+             width = input$plotw, height = input$ploth, units = "in",
+             dpi = input$dpi)
     }
   )
   

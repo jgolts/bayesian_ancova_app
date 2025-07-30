@@ -17,11 +17,11 @@ This is an R Shiny app that performs Bayesian ANCOVA on pre/post measurement dat
 + Displays mean, median, and SD of posterior distribution for each parameter
 + MCMC diagnostics: Trace plots and Rhat, repeated at double the iterations, autocorrelation graphs, posterior histograms
 + Posterior distribution plots with custom width ETI/HDI and mean/median - PDF and CCDF
-+ Download options for all plots and tables
++ Download options for all plots and tables, with custom size in inches and resolution in DPI
 
 ## Planned Features
 + Expansion to 3+ group analysis
 + Additional covariate adjustment
 
 ## Notice
-App defaults largely reflect the settings used in [Bayesian ANCOVA analysis](https://github.com/jgolts/bancova_analysis) of [Vickers, 2006](https://pmc.ncbi.nlm.nih.gov/articles/PMC1489946/) dataset. Please alter settings as relevant to your dataset before analysis.
+App defaults largely reflect the settings used in my [Bayesian ANCOVA analysis](https://github.com/jgolts/bancova_analysis) of the [Vickers, 2006](https://pmc.ncbi.nlm.nih.gov/articles/PMC1489946/) dataset. Please alter settings as relevant to your dataset before analysis.
